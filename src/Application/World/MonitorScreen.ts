@@ -36,6 +36,7 @@ export default class MonitorScreen extends EventEmitter {
     mouseClickInProgress: boolean;
     dimmingPlane: THREE.Mesh;
     videoTextures: { [key in string]: THREE.VideoTexture };
+    wasHidden: boolean;
 
     constructor() {
         super();
@@ -52,6 +53,7 @@ export default class MonitorScreen extends EventEmitter {
         this.videoTextures = {};
         this.mouseClickInProgress = false;
         this.shouldLeaveMonitor = false;
+        this.wasHidden = false;
 
         // Create screen
         this.initializeScreenEvents();
@@ -320,51 +322,68 @@ export default class MonitorScreen extends EventEmitter {
     setupVisibilityHandling() {
         // Handle page visibility changes (when user switches tabs or opens links in new tabs)
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                // Page became visible again - reload iframe to ensure it works
-                this.reloadIframe();
+            if (document.hidden) {
+                // Page is hidden - mark it
+                this.wasHidden = true;
+                console.log('Page hidden - will reload iframe on return');
+            } else if (this.wasHidden) {
+                // Page became visible again after being hidden
+                console.log('Page became visible again - reloading iframe');
+                this.wasHidden = false;
                 this.resumeAudioContext();
+                // Reload iframe only when coming back from hidden state
+                this.reloadIframeContent();
             }
         });
 
-        // Also handle window focus events as backup
+        // Also handle window blur/focus events as backup
+        window.addEventListener('blur', () => {
+            this.wasHidden = true;
+        });
+
         window.addEventListener('focus', () => {
-            // Small delay to ensure everything is ready
-            setTimeout(() => {
-                this.reloadIframe();
-                this.resumeAudioContext();
-            }, 100);
+            if (this.wasHidden) {
+                // Small delay to ensure everything is ready
+                setTimeout(() => {
+                    console.log('Window regained focus - reloading iframe');
+                    this.wasHidden = false;
+                    this.resumeAudioContext();
+                    this.reloadIframeContent();
+                }, 150);
+            }
         });
     }
 
     resumeAudioContext() {
         // Resume audio context if it exists and was suspended
-        if (this.application.audioContext && this.application.audioContext.state === 'suspended') {
-            this.application.audioContext.resume().then(() => {
-                console.log('Audio context resumed');
-            }).catch((err) => {
-                console.error('Failed to resume audio context:', err);
-            });
+        if (this.application.audioContext) {
+            if (this.application.audioContext.state === 'suspended') {
+                this.application.audioContext.resume().then(() => {
+                    console.log('Audio context resumed successfully');
+                }).catch((err) => {
+                    console.error('Failed to resume audio context:', err);
+                });
+            }
         }
     }
 
-    reloadIframe() {
-        // Find the iframe in the CSS scene
+    reloadIframeContent() {
+        // Reload the iframe to restore functionality
         this.cssScene.children.forEach((child) => {
             if (child instanceof CSS3DObject) {
                 const element = child.element as HTMLElement;
-                const iframe = element.querySelector('iframe');
+                const iframe = element.querySelector('iframe') as HTMLIFrameElement;
                 if (iframe && iframe.id === 'computer-screen') {
                     // Store current src
                     const currentSrc = iframe.src;
 
-                    // Reload by setting src to empty and then back
-                    // This ensures all event listeners are re-established
-                    iframe.src = '';
+                    // Force reload by temporarily clearing and restoring the src
+                    iframe.src = 'about:blank';
+
                     setTimeout(() => {
                         iframe.src = currentSrc;
-                        console.log('Iframe reloaded to restore functionality');
-                    }, 50);
+                        console.log('Iframe content reloaded successfully');
+                    }, 100);
                 }
             }
         });
