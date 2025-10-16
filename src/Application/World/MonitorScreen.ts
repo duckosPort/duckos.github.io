@@ -444,8 +444,8 @@ export default class MonitorScreen extends EventEmitter {
         };
 
         // Set iframe attributes
-        // Use localhost:3000
-        iframe.src = 'http://localhost:3000/';
+        // Use production URL
+        iframe.src = 'https://duckosport.github.io/duckosBACK.github.io/';
         iframe.style.width = this.screenSize.width + 'px';
         iframe.style.height = this.screenSize.height + 'px';
         iframe.style.padding = '0px';
