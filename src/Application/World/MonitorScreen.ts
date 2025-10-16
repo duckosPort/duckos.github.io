@@ -55,6 +55,7 @@ export default class MonitorScreen extends EventEmitter {
 
         // Create screen
         this.initializeScreenEvents();
+        this.setupVisibilityHandling();
         this.createIframe();
         const maxOffset = this.createTextureLayers();
         this.createEnclosingPlanes(maxOffset);
@@ -312,6 +313,59 @@ export default class MonitorScreen extends EventEmitter {
                 // Replace geometry
                 mesh.geometry.dispose();
                 mesh.geometry = newGeometry;
+            }
+        });
+    }
+
+    setupVisibilityHandling() {
+        // Handle page visibility changes (when user switches tabs or opens links in new tabs)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // Page became visible again - reload iframe to ensure it works
+                this.reloadIframe();
+                this.resumeAudioContext();
+            }
+        });
+
+        // Also handle window focus events as backup
+        window.addEventListener('focus', () => {
+            // Small delay to ensure everything is ready
+            setTimeout(() => {
+                this.reloadIframe();
+                this.resumeAudioContext();
+            }, 100);
+        });
+    }
+
+    resumeAudioContext() {
+        // Resume audio context if it exists and was suspended
+        if (this.application.audioContext && this.application.audioContext.state === 'suspended') {
+            this.application.audioContext.resume().then(() => {
+                console.log('Audio context resumed');
+            }).catch((err) => {
+                console.error('Failed to resume audio context:', err);
+            });
+        }
+    }
+
+    reloadIframe() {
+        // Find the iframe in the CSS scene
+        this.cssScene.children.forEach((child) => {
+            if (child instanceof CSS3DObject) {
+                const element = child.element as HTMLElement;
+                const iframe = element.querySelector('iframe');
+                if (iframe && iframe.id === 'computer-screen') {
+                    // Store current src
+                    const currentSrc = iframe.src;
+
+                    // Reload by setting src to empty and then back
+                    // This ensures all event listeners are re-established
+                    iframe.src = '';
+                    setTimeout(() => {
+                        iframe.src = currentSrc;
+                        console.log('Iframe reloaded to restore functionality');
+                    }, 50);
+                }
             }
         });
     }
